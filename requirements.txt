@@ -1,6 +1,6 @@
 streamlit>=1.18
 pandas
-plotly
+plotly==5.22.0
 python-dotenv
 sentence-transformers
 transformers
