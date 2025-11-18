@@ -1,0 +1,9 @@
+streamlit>=1.18
+pandas
+plotly
+python-dotenv
+sentence-transformers
+transformers
+torch
+openai
+numpy
