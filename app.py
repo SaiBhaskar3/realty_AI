@@ -32,10 +32,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
-# -------------------------------
-# Data Loading
-# -------------------------------
 df_rexus = load_csv_safe("data_gov_bldg_rexus.csv")
 df_price = load_csv_safe("price.csv")
 
@@ -50,9 +46,6 @@ if emb_model and df_rexus is not None:
 else:
     rexus_embeddings = None
 
-# -------------------------------
-# Sidebar
-# -------------------------------
 st.sidebar.title("UrbanIQ Navigation")
 page = st.sidebar.selectbox("Go to:", ["Compare", "Data Explorer", "Settings"])
 
@@ -66,10 +59,6 @@ if "data1" not in st.session_state:
 if "data2" not in st.session_state:
     st.session_state.data2 = None
 
-
-# -------------------------------
-# PAGE 1: Compare
-# -------------------------------
 if page == "Compare":
 
     st.header("🏙️ UrbanIQ – Compare Two US Locations")
@@ -123,9 +112,6 @@ if page == "Compare":
         with colB:
             card(st.session_state.data2, loc2)
 
-        # -------------------------------
-        # Safety Bar Chart
-        # -------------------------------
         st.subheader("🚓 Safety Comparison")
 
         safety_df = pd.DataFrame([
@@ -143,9 +129,6 @@ if page == "Compare":
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # -------------------------------
-        # Quality Radar Chart
-        # -------------------------------
         st.subheader("🌿 Quality of Life Radar Chart")
 
         def quality_df(row, label):
@@ -170,10 +153,6 @@ if page == "Compare":
         )
         st.plotly_chart(fig_radar, use_container_width=True)
 
-
-# -------------------------------
-# PAGE 2: Data Explorer
-# -------------------------------
 elif page == "Data Explorer":
 
     st.header("🔎 Data Explorer")
@@ -194,10 +173,6 @@ elif page == "Data Explorer":
     else:
         st.info("Upload data_gov_bldg_rexus.csv to enable Data Explorer.")
 
-
-# -------------------------------
-# PAGE 3: Settings
-# -------------------------------
 elif page == "Settings":
 
     st.header("⚙️ Settings")
