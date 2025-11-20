@@ -1,3 +1,25 @@
+import streamlit as st
+import traceback, sys
+
+st.write("🔍 Debug: Loading utils...")
+
+try:
+    from utils import (
+        sanitize_location_text,
+        load_csv_safe,
+        geocode_city_state,
+        get_safety_data,
+        get_quality_data,
+        get_price_data_for_city,
+        semantic_retrieve_rexus
+    )
+    st.write("✅ utils.py imported successfully")
+except Exception as e:
+    st.error("❌ UTILS IMPORT FAILED — check the printed error below")
+    st.code(str(e))
+    traceback.print_exc()
+    st.stop()
+
 import os
 import time
 from datetime import datetime
