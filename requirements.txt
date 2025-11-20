@@ -9,3 +9,6 @@ openai
 numpy
 scikit-learn
 requests
+geopy
+yfinance
+beautifulsoup4
