@@ -2,6 +2,8 @@ import streamlit as st
 import traceback
 from datetime import datetime
 import pandas as pd
+import plotly.express as px
+
 from utils import (
     sanitize_location_text,
     load_csv_safe,
@@ -14,7 +16,11 @@ from utils import (
     semantic_retrieve_rexus
 )
 
-st.set_page_config(page_title="UrbanIQ – US Neighborhood Insights", page_icon="🏙️", layout="wide")
+st.set_page_config(
+    page_title="UrbanIQ – US Neighborhood Insights",
+    page_icon="🏙️",
+    layout="wide"
+)
 
 st.markdown("""
 <style>
@@ -116,47 +122,152 @@ if page == "Compare":
 
             st.success("Comparison Ready!")
 
-    p1 = st.session_state.data1["price"].get("price_timeseries")
-    p2 = st.session_state.data2["price"].get("price_timeseries")
-    ts_df = pd.DataFrame()
+    if st.session_state.data1 and st.session_state.data2:
+        st.markdown(f"**Last Updated:** {datetime.now().strftime('%B %d, %Y %I:%M %p')}")
 
-    def prepare_ts(data, label):
-        if data is None:
-            return pd.DataFrame()
-        if isinstance(data, pd.Series):
-            return data.to_frame(name=label)
-        elif isinstance(data, pd.DataFrame):
-            df = data.copy()
-            if len(df.columns) > 1:
-                df[label] = df.iloc[:, 0]
-                return df[[label]]
+        st.subheader("🏠 Real Estate & Price Snapshot")
+        colA, colB = st.columns(2)
+
+        def property_card(data, title):
+            re = data.get("real_estate", {})
+            price = data.get("price", {})
+            st.markdown(f"### {title}")
+            st.markdown("<div class='metric-item'>", unsafe_allow_html=True)
+            if re:
+                keys_show = ["Bldg Address1", "Bldg Status", "Property Type", "Bldg ANSI Usable",
+                             "Total Parking Spaces", "Owned/Leased", "Construction Date", "Historical Status"]
+                for k in keys_show:
+                    st.write(f"**{k.replace('_',' ').title()}:** {re.get(k, 'N/A')}")
             else:
-                df.columns = [label]
-                return df
+                st.write("**No building registry data available.**")
+            latest = price.get("latest_price", "No data")
+            median = price.get("median_price", "No data")
+            st.markdown("---")
+            st.write("**Latest Price (city-level):**", latest)
+            st.write("**Median Price (city-level):**", median)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with colA:
+            property_card(st.session_state.data1, loc1)
+        with colB:
+            property_card(st.session_state.data2, loc2)
+
+        p1 = st.session_state.data1["price"].get("price_timeseries")
+        p2 = st.session_state.data2["price"].get("price_timeseries")
+        ts_df = pd.DataFrame()
+
+        def prepare_ts(data, label):
+            if data is None:
+                return pd.DataFrame()
+            if isinstance(data, pd.Series):
+                return data.to_frame(name=label)
+            elif isinstance(data, pd.DataFrame):
+                df = data.copy()
+                if len(df.columns) > 1:
+                    df[label] = df.iloc[:, 0]
+                    return df[[label]]
+                else:
+                    df.columns = [label]
+                    return df
+            else:
+                return pd.DataFrame()
+
+        ts_df1 = prepare_ts(p1, loc1)
+        ts_df2 = prepare_ts(p2, loc2)
+
+        if not ts_df1.empty and not ts_df2.empty:
+            ts_df = pd.concat([ts_df1, ts_df2], axis=1)
+        elif not ts_df1.empty:
+            ts_df = ts_df1
+        elif not ts_df2.empty:
+            ts_df = ts_df2
+
+        if not ts_df.empty:
+            try:
+                parsed_idx = pd.to_datetime(ts_df.index, errors='coerce')
+                if parsed_idx.notna().any():
+                    ts_df.index = parsed_idx
+                ts_df = ts_df.sort_index()
+            except Exception:
+                pass
+            fig_price = px.line(ts_df, x=ts_df.index, y=ts_df.columns, markers=True)
+            fig_price.update_layout(xaxis_title="Date", yaxis_title="Price")
+            st.plotly_chart(fig_price, use_container_width=True)
         else:
-            return pd.DataFrame()
+            st.info("No city-level time series price data available for either location.")
 
-    ts_df1 = prepare_ts(p1, loc1)
-    ts_df2 = prepare_ts(p2, loc2)
+        st.subheader("🚓 Safety Comparison")
+        safety_df = pd.DataFrame([
+            {"Location": loc1, "Score": st.session_state.data1["safety"]["crime_index"]},
+            {"Location": loc2, "Score": st.session_state.data2["safety"]["crime_index"]}
+        ])
+        fig_safety = px.bar(safety_df, x="Location", y="Score", text="Score", color="Location",
+                            labels={"Score": "Safety Score (Higher = Safer)"})
+        st.plotly_chart(fig_safety, use_container_width=True)
 
-    if not ts_df1.empty and not ts_df2.empty:
-        ts_df = pd.concat([ts_df1, ts_df2], axis=1)
-    elif not ts_df1.empty:
-        ts_df = ts_df1
-    elif not ts_df2.empty:
-        ts_df = ts_df2
+        col1_tr, col2_tr = st.columns(2)
+        with col1_tr:
+            st.markdown(f"**{loc1} Trend:** {st.session_state.data1['safety']['crime_trend']}")
+            st.markdown(f"Severity: {st.session_state.data1['safety']['severity']}")
+        with col2_tr:
+            st.markdown(f"**{loc2} Trend:** {st.session_state.data2['safety']['crime_trend']}")
+            st.markdown(f"Severity: {st.session_state.data2['safety']['severity']}")
 
-    if not ts_df.empty:
-        try:
-            parsed_idx = pd.to_datetime(ts_df.index, errors='coerce')
-            if parsed_idx.notna().any():
-                ts_df.index = parsed_idx
-            ts_df = ts_df.sort_index()
-        except Exception:
-            pass
-        import plotly.express as px
-        fig_price = px.line(ts_df, x=ts_df.index, y=ts_df.columns, markers=True)
-        fig_price.update_layout(xaxis_title="Date", yaxis_title="Price")
-        st.plotly_chart(fig_price, use_container_width=True)
+        st.subheader("🌿 Quality of Life Radar Chart")
+
+        def quality_df(row, label):
+            q = row.get("quality", {})
+            def to_num(x):
+                if isinstance(x, str) and "/" in x:
+                    return float(x.split("/")[0])
+                return float(x) if x is not None else 0
+            return pd.DataFrame({
+                "Metric": ["Walkability", "Air Quality", "Transit", "Healthcare", "Restaurants"],
+                "Value": [to_num(q.get("walkability")), to_num(q.get("air_quality")),
+                          to_num(q.get("transit")), to_num(q.get("healthcare")), to_num(q.get("restaurants"))],
+                "Location": label
+            })
+
+        radar_data = pd.concat([quality_df(st.session_state.data1, loc1),
+                                quality_df(st.session_state.data2, loc2)])
+        fig_radar = px.line_polar(radar_data, r="Value", theta="Metric", color="Location", line_close=True)
+        st.plotly_chart(fig_radar, use_container_width=True)
+
+        st.subheader("📚 Education & Schools")
+        col_e1, col_e2 = st.columns(2)
+        with col_e1:
+            ed = st.session_state.data1.get("education", {})
+            st.markdown(f"**{loc1}**")
+            for k, v in ed.items():
+                st.write(f"{k.replace('_',' ').title()}: {v}")
+        with col_e2:
+            ed = st.session_state.data2.get("education", {})
+            st.markdown(f"**{loc2}**")
+            for k, v in ed.items():
+                st.write(f"{k.replace('_',' ').title()}: {v}")
+
+elif page == "Data Explorer":
+    st.header("🔎 Data Explorer")
+    if df_rexus is not None:
+        st.subheader("Building Dataset (Sample)")
+        st.dataframe(df_rexus.head(50))
+        query = st.text_input("Search Buildings (Semantic)")
+        k = st.slider("Top K", 1, 10, 3)
+        if st.button("Search Buildings"):
+            results = semantic_retrieve_rexus(query, df_rexus, rexus_embeddings, emb_model, top_k=k) if MODEL_AVAILABLE else pd.DataFrame()
+            if results is None or results.empty:
+                st.info("No results or embeddings/model not available.")
+            else:
+                st.dataframe(results)
     else:
-        st.info("No city-level time series price data available for either location.")
+        st.info("Upload 'data_gov_bldg_rexus.csv' in app root to explore building data.")
+
+elif page == "Settings":
+    st.header("⚙️ Settings & Diagnostics")
+    st.info("UrbanIQ demo mode — add API keys for real data for Census/WAQI/Zillow/FBI")
+    st.markdown("### Data files detected:")
+    st.write("data_gov_bldg_rexus.csv:", "FOUND" if df_rexus is not None else "NOT FOUND")
+    st.write("price.csv:", "FOUND" if df_price is not None else "NOT FOUND")
+
+st.markdown("---")
+st.caption("UrbanIQ — Data-driven neighborhood insights. Replace demo data with real CSVs & API keys for production.")
